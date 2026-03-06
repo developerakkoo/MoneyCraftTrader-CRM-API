@@ -1,9 +1,61 @@
 const crypto = require("crypto");
 
 const User = require("../models/user.model");
+const Role = require("../models/role.model");
 const asyncHandler = require("../utils/asyncHandler");
 const HttpError = require("../utils/httpError");
 const { signToken } = require("../utils/jwt");
+const { SYSTEM_ROLES } = require("../constants/permissions");
+
+const register = asyncHandler(async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    throw new HttpError(400, "Name, email and password are required");
+  }
+
+  // const userCount = await User.countDocuments();
+  // if (userCount > 0) {
+  //   throw new HttpError(403, "Registration is disabled. An admin already exists.");
+  // }
+
+  const superAdminRole = await Role.findOne({ name: SYSTEM_ROLES.SUPER_ADMIN });
+  if (!superAdminRole) {
+    throw new HttpError(500, "Super Admin role not found. Run the server to bootstrap roles first.");
+  }
+
+  const existing = await User.findOne({ email: email.toLowerCase() });
+  if (existing) {
+    throw new HttpError(409, "User already exists with this email");
+  }
+
+  const passwordHash = await User.hashPassword(password);
+  const user = await User.create({
+    name: name.trim(),
+    email: email.toLowerCase().trim(),
+    passwordHash,
+    role: superAdminRole._id,
+  });
+
+  const populated = await User.findById(user._id).populate("role");
+  const token = signToken({
+    userId: populated._id,
+    roleId: populated.role._id,
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      token,
+      user: {
+        id: populated._id,
+        name: populated.name,
+        email: populated.email,
+        role: populated.role,
+      },
+    },
+  });
+});
 
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -131,5 +183,6 @@ module.exports = {
   login,
   logout,
   me,
+  register,
   resetPassword,
 };

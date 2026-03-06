@@ -51,7 +51,41 @@ const createUser = asyncHandler(async (req, res) => {
   });
 });
 
+const updateUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { name, roleId } = req.body;
+
+  const user = await User.findById(id);
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  if (name !== undefined && name.trim()) user.name = name.trim();
+  if (roleId !== undefined) {
+    const role = await Role.findById(roleId);
+    if (!role) throw new HttpError(404, "Role not found");
+    user.role = roleId;
+  }
+
+  await user.save();
+  const populated = await User.findById(user._id).populate("role", "name permissions");
+  res.status(200).json({ success: true, data: populated });
+});
+
+const deleteUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const user = await User.findById(id);
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+  user.isActive = false;
+  await user.save();
+  res.status(200).json({ success: true });
+});
+
 module.exports = {
   createUser,
   listUsers,
+  updateUser,
+  deleteUser,
 };

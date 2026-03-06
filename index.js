@@ -1,12 +1,17 @@
+const path = require("path");
 const dotenv = require("dotenv");
 
+// Load .env; if MONGODB_URI is still missing, try loading from 'env' (template in repo)
 dotenv.config();
+if (!process.env.MONGODB_URI) {
+  dotenv.config({ path: path.resolve(__dirname, "env") });
+}
 
 const app = require("./app");
 const connectDB = require("./src/config/db");
 const { ensureSystemRoles, ensureSuperAdmin } = require("./src/services/bootstrap.service");
 
-const PORT = Number(process.env.PORT) || 5000;
+const PORT = Number(process.env.PORT) || 5001;
 
 const startServer = async () => {
   try {

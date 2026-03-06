@@ -1,0 +1,9 @@
+PORT=5001
+MONGODB_URI=mongodb+srv://shubhamshelke6103_db:shubhamshelke@cluster0.23riiuz.mongodb.net/moneycarft?retryWrites=true&w=majority
+JWT_SECRET=replace-with-strong-secret
+JWT_EXPIRES_IN=7d
+SUPER_ADMIN_NAME=Super Admin
+SUPER_ADMIN_EMAIL=admin@test.com
+SUPER_ADMIN_PASSWORD=pass@123
+
+
