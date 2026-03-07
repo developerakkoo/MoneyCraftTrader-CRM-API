@@ -6,6 +6,8 @@ const User = require("../models/user.model");
 const HttpError = require("../utils/httpError");
 const { LEAD_STATUSES } = require("../constants/lead");
 const { PERMISSIONS } = require("../constants/permissions");
+const { logDebug, logError, logWarn } = require("../utils/logger");
+const webinarNotificationService = require("./webinarNotification.services");
 
 const buildLeadFilters = (query) => {
   const filters = {};
@@ -91,12 +93,19 @@ const createLead = async (payload) => {
     throw new HttpError(409, "Lead already exists with this phone number");
   }
 
+  const webinar = await webinarNotificationService.findWebinarForLead({
+    webinarId: payload.webinarId,
+    webinarTitle: payload.webinarTitle,
+  });
+
   const lead = await Lead.create({
-    name: payload.name,
-    email: payload.email,
+    name: payload.name.trim(),
+    email: payload.email.toLowerCase().trim(),
     phone: payload.phone.trim(),
     city: payload.city || "",
     source: payload.source || "checkout",
+    webinar: webinar?._id || null,
+    webinarTitle: webinar?.title || (payload.webinarTitle || "").trim(),
     status: "New",
   });
 
@@ -106,10 +115,86 @@ const createLead = async (payload) => {
     meta: {
       source: lead.source,
       status: lead.status,
+      webinarId: lead.webinar,
+      webinarTitle: lead.webinarTitle,
     },
   });
 
-  return lead;
+  if ((lead.source || "").toLowerCase() === "checkout" && webinar) {
+    logDebug("lead-registration", "Attempting webinar confirmation notification", {
+      leadId: lead._id,
+      webinarId: webinar._id,
+      phone: lead.phone,
+      webinarTitle: webinar.title,
+    });
+
+    try {
+      const notificationResult =
+        await webinarNotificationService.sendWebinarRegistrationConfirmation({
+          lead,
+          webinar,
+        });
+
+      logDebug("lead-registration", "Webinar confirmation notification completed", {
+        leadId: lead._id,
+        webinarId: webinar._id,
+        skipped: notificationResult.skipped,
+        reason: notificationResult.reason || null,
+        response: notificationResult.data || null,
+      });
+
+      await createLeadActivity({
+        leadId: lead._id,
+        action: notificationResult.skipped
+          ? "webinar_confirmation_skipped"
+          : "webinar_confirmation_sent",
+        meta: {
+          webinarId: webinar._id,
+          webinarTitle: webinar.title,
+          provider: "wati",
+          reason: notificationResult.reason || null,
+          response: notificationResult.data || null,
+        },
+      });
+    } catch (error) {
+      logError("lead-registration", "Webinar confirmation notification failed", {
+        leadId: lead._id,
+        webinarId: webinar._id,
+        error: error.message,
+        details: error.errors || null,
+      });
+
+      await createLeadActivity({
+        leadId: lead._id,
+        action: "webinar_confirmation_failed",
+        meta: {
+          webinarId: webinar._id,
+          webinarTitle: webinar.title,
+          provider: "wati",
+          error: error.message,
+          details: error.errors || null,
+        },
+      });
+    }
+  } else if ((lead.source || "").toLowerCase() === "checkout" && lead.webinarTitle) {
+    logWarn("lead-registration", "Skipping webinar confirmation because webinar could not be matched", {
+      leadId: lead._id,
+      webinarTitle: lead.webinarTitle,
+    });
+
+    await createLeadActivity({
+      leadId: lead._id,
+      action: "webinar_confirmation_skipped",
+      meta: {
+        webinarTitle: lead.webinarTitle,
+        reason: "No scheduled webinar matched the provided webinar title",
+      },
+    });
+  }
+
+  return Lead.findById(lead._id)
+    .populate("assignedTo", "name email")
+    .populate("webinar", "title eventDate startTime durationMinutes mode platform webinarLink location");
 };
 
 const listLeads = async (query) => {
@@ -121,6 +206,7 @@ const listLeads = async (query) => {
   const [items, total] = await Promise.all([
     Lead.find(filters)
       .populate("assignedTo", "name email")
+      .populate("webinar", "title eventDate startTime durationMinutes mode platform webinarLink location")
       .sort(sort)
       .skip((page - 1) * limit)
       .limit(limit),
@@ -143,7 +229,9 @@ const getLeadDetail = async (leadId) => {
     throw new HttpError(400, "Invalid lead id");
   }
 
-  const lead = await Lead.findById(leadId).populate("assignedTo", "name email");
+  const lead = await Lead.findById(leadId)
+    .populate("assignedTo", "name email")
+    .populate("webinar", "title eventDate startTime durationMinutes mode platform webinarLink location");
   if (!lead) {
     throw new HttpError(404, "Lead not found");
   }
@@ -217,7 +305,9 @@ const updateLead = async (leadId, updates, actor) => {
   await lead.save();
   await Promise.all(activityJobs);
 
-  return Lead.findById(leadId).populate("assignedTo", "name email");
+  return Lead.findById(leadId)
+    .populate("assignedTo", "name email")
+    .populate("webinar", "title eventDate startTime durationMinutes mode platform webinarLink location");
 };
 
 const addLeadNote = async (leadId, userId, body) => {

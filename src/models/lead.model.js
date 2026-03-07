@@ -29,6 +29,16 @@ const leadSchema = new mongoose.Schema(
       trim: true,
       default: "checkout",
     },
+    webinar: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Webinar",
+      default: null,
+    },
+    webinarTitle: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     status: {
       type: String,
       enum: LEAD_STATUSES,
@@ -49,5 +59,6 @@ leadSchema.index({ createdAt: -1 });
 leadSchema.index({ status: 1, assignedTo: 1, createdAt: -1 });
 leadSchema.index({ email: 1 });
 leadSchema.index({ phone: 1 });
+leadSchema.index({ webinar: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Lead", leadSchema);

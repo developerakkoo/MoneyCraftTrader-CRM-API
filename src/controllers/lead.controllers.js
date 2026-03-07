@@ -4,7 +4,7 @@ const pick = require("../utils/pick");
 const leadService = require("../services/lead.services");
 
 const createLead = asyncHandler(async (req, res) => {
-  const { name, email, phone, city, source } = req.body;
+  const { name, email, phone, city, source, webinarId, webinarTitle } = req.body;
 
   if (!name || !email || !phone) {
     throw new HttpError(400, "Name, email and phone are required");
@@ -16,6 +16,8 @@ const createLead = asyncHandler(async (req, res) => {
     phone,
     city,
     source,
+    webinarId,
+    webinarTitle,
   });
 
   res.status(201).json({
