@@ -11,6 +11,7 @@ const app = require("./app");
 const connectDB = require("./src/config/db");
 const { ensureSystemRoles, ensureSuperAdmin } = require("./src/services/bootstrap.service");
 const { startWebinarReminderScheduler } = require("./src/services/webinarReminder.service");
+const http = require("http");
 
 const PORT = Number(process.env.PORT) || 5001;
 
@@ -21,7 +22,9 @@ const startServer = async () => {
     await ensureSuperAdmin();
     startWebinarReminderScheduler();
 
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+
+    server.listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);
     });
   } catch (error) {

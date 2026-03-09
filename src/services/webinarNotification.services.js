@@ -27,29 +27,41 @@ const findWebinarForLead = async ({ webinarId, webinarTitle }) => {
     }
   }
 
-  if (!webinarTitle || !webinarTitle.trim()) {
-    logWarn("webinar-notification", "No webinar title or webinar id provided for lead");
-    return null;
+  let titleToMatch = (webinarTitle && String(webinarTitle).trim()) || null;
+  if (!titleToMatch && process.env.DEFAULT_WEBINAR_TITLE) {
+    titleToMatch = String(process.env.DEFAULT_WEBINAR_TITLE).trim();
+    logDebug("webinar-notification", "Using DEFAULT_WEBINAR_TITLE fallback", { titleToMatch });
   }
-
-  const webinar = await Webinar.findOne({
-    title: new RegExp(`^${escapeRegex(webinarTitle.trim())}$`, "i"),
-    status: "SCHEDULED",
-  });
-
-  if (!webinar) {
-    logWarn("webinar-notification", "No scheduled webinar matched the provided title", {
-      webinarTitle: webinarTitle.trim(),
+  if (titleToMatch) {
+    const webinar = await Webinar.findOne({
+      title: new RegExp(`^${escapeRegex(titleToMatch)}$`, "i"),
+      status: "SCHEDULED",
     });
-    return null;
+    if (webinar) {
+      logDebug("webinar-notification", "Matched webinar by webinarTitle", {
+        webinarTitle: webinar.title,
+        webinarId: webinar._id,
+      });
+      return webinar;
+    }
+    logWarn("webinar-notification", "No scheduled webinar matched the provided title", {
+      webinarTitle: titleToMatch,
+    });
   }
 
-  logDebug("webinar-notification", "Matched webinar by webinarTitle", {
-    webinarTitle: webinar.title,
-    webinarId: webinar._id,
-  });
+  const defaultWebinar = await Webinar.findOne({ status: "SCHEDULED" })
+    .sort({ eventDate: 1, startTime: 1 })
+    .limit(1);
+  if (defaultWebinar) {
+    logDebug("webinar-notification", "Using most recent SCHEDULED webinar as fallback", {
+      webinarId: defaultWebinar._id,
+      webinarTitle: defaultWebinar.title,
+    });
+    return defaultWebinar;
+  }
 
-  return webinar;
+  logWarn("webinar-notification", "No webinar title or webinar id provided for lead, and no fallback found");
+  return null;
 };
 
 const sendWebinarRegistrationConfirmation = async ({ lead, webinar }) => {

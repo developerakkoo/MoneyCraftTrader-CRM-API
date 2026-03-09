@@ -16,6 +16,10 @@ const buildLeadFilters = (query) => {
     filters.status = query.status;
   }
 
+  if (query.priority) {
+    filters.priority = query.priority;
+  }
+
   if (query.source) {
     filters.source = query.source;
   }
@@ -34,6 +38,18 @@ const buildLeadFilters = (query) => {
     if (query.dateTo) {
       filters.createdAt.$lte = new Date(query.dateTo);
     }
+  }
+
+  if (query.followUp === "today") {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    filters.followUpDate = { $gte: start, $lte: end };
+  } else if (query.followUp === "overdue") {
+    const now = new Date();
+    filters.followUpDate = { $lt: now };
+    filters.status = { $nin: ["Converted", "Lost"] };
   }
 
   if (query.search) {
@@ -88,9 +104,17 @@ const validateLeadAssignee = async (assignedTo) => {
 };
 
 const createLead = async (payload) => {
-  const existingLead = await Lead.findOne({ phone: payload.phone.trim() });
+  const existingLead = await Lead.findOne({
+    $or: [
+      { phone: payload.phone.trim() },
+      { email: payload.email.toLowerCase().trim() }
+    ]
+  });
   if (existingLead) {
-    throw new HttpError(409, "Lead already exists with this phone number");
+    return {
+      isDuplicate: true,
+      existingLeadId: existingLead._id
+    };
   }
 
   const webinar = await webinarNotificationService.findWebinarForLead({
@@ -224,7 +248,7 @@ const listLeads = async (query) => {
   };
 };
 
-const getLeadDetail = async (leadId) => {
+const getLeadDetail = async (leadId, userId) => {
   if (!mongoose.Types.ObjectId.isValid(leadId)) {
     throw new HttpError(400, "Invalid lead id");
   }
@@ -234,6 +258,14 @@ const getLeadDetail = async (leadId) => {
     .populate("webinar", "title eventDate startTime durationMinutes mode platform webinarLink location");
   if (!lead) {
     throw new HttpError(404, "Lead not found");
+  }
+
+  if (userId) {
+    await createLeadActivity({
+      leadId,
+      userId,
+      action: "lead_opened",
+    });
   }
 
   const [notes, activities] = await Promise.all([
@@ -279,6 +311,41 @@ const updateLead = async (leadId, updates, actor) => {
       );
       lead.status = updates.status;
     }
+  }
+
+  if (updates.priority !== undefined) {
+    if (!["hot", "warm", "cold"].includes(updates.priority)) {
+      throw new HttpError(400, "Invalid priority");
+    }
+    if (updates.priority !== lead.priority) {
+      activityJobs.push(
+        createLeadActivity({
+          leadId,
+          userId: actor._id,
+          action: "priority_changed",
+          meta: {
+            previousPriority: lead.priority,
+            currentPriority: updates.priority,
+          },
+        })
+      );
+      lead.priority = updates.priority;
+    }
+  }
+
+  if (updates.followUpDate !== undefined) {
+    activityJobs.push(
+      createLeadActivity({
+        leadId,
+        userId: actor._id,
+        action: "followup_scheduled",
+        meta: {
+          previousDate: lead.followUpDate,
+          currentDate: updates.followUpDate,
+        },
+      })
+    );
+    lead.followUpDate = updates.followUpDate;
   }
 
   if (updates.assignedTo !== undefined) {
@@ -338,10 +405,73 @@ const addLeadNote = async (leadId, userId, body) => {
   return LeadNote.findById(note._id).populate("user", "name email");
 };
 
+const getLeadStats = async () => {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const [totalLeads, newLeadsToday, convertedLeads, lostLeads, followupsToday] = await Promise.all([
+    Lead.countDocuments(),
+    Lead.countDocuments({ createdAt: { $gte: startOfToday } }),
+    Lead.countDocuments({ status: "Converted" }),
+    Lead.countDocuments({ status: "Lost" }),
+    Lead.countDocuments({ followUpDate: { $gte: startOfToday, $lt: new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000) } })
+  ]);
+
+  return {
+    total_leads: totalLeads,
+    new_leads_today: newLeadsToday,
+    converted_leads: convertedLeads,
+    lost_leads: lostLeads,
+    followups_today: followupsToday
+  };
+};
+
+const exportLeads = async () => {
+  const leads = await Lead.find().populate("assignedTo", "name").sort({ createdAt: -1 });
+
+  let csv = "Name,Email,Phone,City,Source,Status,Priority,AssignedTo,FollowUpDate,CreatedAt\n";
+  for (const lead of leads) {
+    const row = [
+      `"${(lead.name || "").replace(/"/g, '""')}"`,
+      `"${(lead.email || "").replace(/"/g, '""')}"`,
+      `"${(lead.phone || "").replace(/"/g, '""')}"`,
+      `"${(lead.city || "").replace(/"/g, '""')}"`,
+      `"${(lead.source || "").replace(/"/g, '""')}"`,
+      `"${lead.status || ""}"`,
+      `"${lead.priority || ""}"`,
+      `"${lead.assignedTo ? lead.assignedTo.name : "Unassigned"}"`,
+      `"${lead.followUpDate ? lead.followUpDate.toISOString() : ""}"`,
+      `"${lead.createdAt.toISOString()}"`
+    ];
+    csv += row.join(",") + "\n";
+  }
+  return csv;
+};
+
+const deleteLead = async (leadId) => {
+  if (!mongoose.Types.ObjectId.isValid(leadId)) {
+    throw new HttpError(400, "Invalid lead id");
+  }
+
+  const lead = await Lead.findById(leadId);
+  if (!lead) {
+    throw new HttpError(404, "Lead not found");
+  }
+
+  await Promise.all([
+    LeadActivity.deleteMany({ lead: leadId }),
+    LeadNote.deleteMany({ lead: leadId }),
+  ]);
+  await Lead.findByIdAndDelete(leadId);
+};
+
 module.exports = {
   addLeadNote,
   createLead,
+  deleteLead,
   getLeadDetail,
   listLeads,
   updateLead,
+  getLeadStats,
+  exportLeads,
 };

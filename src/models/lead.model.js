@@ -39,6 +39,15 @@ const leadSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    priority: {
+      type: String,
+      enum: ["hot", "warm", "cold"],
+      default: "cold",
+    },
+    followUpDate: {
+      type: Date,
+      default: null,
+    },
     status: {
       type: String,
       enum: LEAD_STATUSES,

@@ -3,6 +3,26 @@ const HttpError = require("../utils/httpError");
 const pick = require("../utils/pick");
 const leadService = require("../services/lead.services");
 
+const EventEmitter = require('events');
+const leadEvents = new EventEmitter();
+
+const streamLeadEvents = asyncHandler(async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const onNewLead = (lead) => {
+    res.write(`event: new-lead\ndata: ${JSON.stringify(lead)}\n\n`);
+  };
+
+  leadEvents.on('new-lead', onNewLead);
+
+  req.on('close', () => {
+    leadEvents.removeListener('new-lead', onNewLead);
+  });
+});
+
 const createLead = asyncHandler(async (req, res) => {
   const { name, email, phone, city, source, webinarId, webinarTitle } = req.body;
 
@@ -19,6 +39,16 @@ const createLead = asyncHandler(async (req, res) => {
     webinarId,
     webinarTitle,
   });
+
+  if (lead.isDuplicate) {
+    return res.status(200).json({
+      success: true,
+      duplicate: true,
+      existingLeadId: lead.existingLeadId,
+    });
+  }
+
+  leadEvents.emit('new-lead', lead);
 
   res.status(201).json({
     success: true,
@@ -37,7 +67,7 @@ const listLeads = asyncHandler(async (req, res) => {
 });
 
 const getLeadById = asyncHandler(async (req, res) => {
-  const result = await leadService.getLeadDetail(req.params.id);
+  const result = await leadService.getLeadDetail(req.params.id, req.user._id);
 
   res.status(200).json({
     success: true,
@@ -46,7 +76,7 @@ const getLeadById = asyncHandler(async (req, res) => {
 });
 
 const updateLead = asyncHandler(async (req, res) => {
-  const updates = pick(req.body, ["status", "assignedTo"]);
+  const updates = pick(req.body, ["status", "assignedTo", "priority", "followUpDate"]);
   if (Object.keys(updates).length === 0) {
     throw new HttpError(400, "No valid fields provided for update");
   }
@@ -73,10 +103,34 @@ const addLeadNote = asyncHandler(async (req, res) => {
   });
 });
 
+const getLeadStats = asyncHandler(async (req, res) => {
+  const stats = await leadService.getLeadStats();
+  res.status(200).json({
+    success: true,
+    data: stats,
+  });
+});
+
+const exportLeads = asyncHandler(async (req, res) => {
+  const csv = await leadService.exportLeads();
+  res.header("Content-Type", "text/csv");
+  res.attachment("leads.csv");
+  return res.send(csv);
+});
+
+const deleteLead = asyncHandler(async (req, res) => {
+  await leadService.deleteLead(req.params.id);
+  res.status(200).json({ success: true });
+});
+
 module.exports = {
   addLeadNote,
   createLead,
+  deleteLead,
   getLeadById,
   listLeads,
   updateLead,
+  getLeadStats,
+  exportLeads,
+  streamLeadEvents,
 };

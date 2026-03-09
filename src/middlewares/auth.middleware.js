@@ -4,13 +4,19 @@ const HttpError = require("../utils/httpError");
 const { verifyToken } = require("../utils/jwt");
 
 const authenticate = asyncHandler(async (req, _res, next) => {
+  let token;
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+  } else if (req.query.token) {
+    token = req.query.token;
+  }
+
+  if (!token) {
     throw new HttpError(401, "Authentication token is required");
   }
 
-  const token = authHeader.split(" ")[1];
   const payload = verifyToken(token);
 
   const user = await User.findById(payload.userId).populate("role");
