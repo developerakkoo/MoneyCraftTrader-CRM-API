@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const REMINDER_TYPES = ["ONE_HOUR", "TEN_MINUTES"];
+const REMINDER_TYPES = ["ONE_DAY", "ONE_HOUR", "TEN_MINUTES"];
 const REMINDER_STATUSES = ["SENT", "FAILED", "SKIPPED"];
 
 const webinarReminderLogSchema = new mongoose.Schema(

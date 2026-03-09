@@ -2,13 +2,13 @@
   "info": {
     "name": "MoneyCraftTrader CRM API",
     "_postman_id": "7f8c3c48-9e5c-4c4f-8a2d-1b2d3e4f5a6b",
-    "description": "Phase 1 and Phase 2 backend API collection for MoneyCraftTrader CRM.",
+    "description": "Postman collection synced with the current MoneyCraftTrader CRM API routes, including auth, roles, users, leads, and webinars.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:5000"
+      "value": "http://localhost:5001"
     },
     {
       "key": "token",
@@ -27,8 +27,20 @@
       "value": ""
     },
     {
+      "key": "webinarId",
+      "value": ""
+    },
+    {
       "key": "resetToken",
       "value": ""
+    },
+    {
+      "key": "superAdminEmail",
+      "value": "admin@test.com"
+    },
+    {
+      "key": "superAdminPassword",
+      "value": "pass@123"
     }
   ],
   "item": [
@@ -52,18 +64,16 @@
       "name": "Auth",
       "item": [
         {
-          "name": "Login - Super Admin",
+          "name": "Register Super Admin",
           "event": [
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
-                  "if (json.data && json.data.token) {",
-                  "  pm.collectionVariables.set('token', json.data.token);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "if (json.data && json.data.token) pm.collectionVariables.set('token', json.data.token);"
+                ]
               }
             }
           ],
@@ -77,7 +87,46 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"pass@123\"\n}"
+              "raw": "{\n  \"name\": \"Super Admin\",\n  \"email\": \"{{superAdminEmail}}\",\n  \"password\": \"{{superAdminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login - Super Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) pm.collectionVariables.set('token', json.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{superAdminEmail}}\",\n  \"password\": \"{{superAdminPassword}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/login",
@@ -121,13 +170,11 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
-                  "if (json.data && json.data.resetToken) {",
-                  "  pm.collectionVariables.set('resetToken', json.data.resetToken);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "if (json.data && json.data.resetToken) pm.collectionVariables.set('resetToken', json.data.resetToken);"
+                ]
               }
             }
           ],
@@ -141,7 +188,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@test.com\"\n}"
+              "raw": "{\n  \"email\": \"{{superAdminEmail}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/forgot-password",
@@ -239,13 +286,11 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
-                  "if (json.data && json.data._id) {",
-                  "  pm.collectionVariables.set('roleId', json.data._id);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "if (json.data && json.data._id) pm.collectionVariables.set('roleId', json.data._id);"
+                ]
               }
             }
           ],
@@ -263,7 +308,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Sales Executive\",\n  \"description\": \"Handles leads and follow-ups\",\n  \"permissions\": [\n    \"lead:view\",\n    \"lead:update\",\n    \"lead:assign\",\n    \"lead:note:create\",\n    \"lead:activity:view\",\n    \"user:view\",\n    \"role:view\"\n  ]\n}"
+              "raw": "{\n  \"name\": \"Sales Executive\",\n  \"description\": \"Handles leads, webinars, and follow-ups\",\n  \"permissions\": [\n    \"lead:view\",\n    \"lead:update\",\n    \"lead:assign\",\n    \"lead:note:create\",\n    \"lead:activity:view\",\n    \"webinar:view\",\n    \"user:view\",\n    \"role:view\"\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/roles",
@@ -293,7 +338,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"description\": \"Updated sales role\",\n  \"permissions\": [\n    \"lead:view\",\n    \"lead:update\",\n    \"lead:assign\",\n    \"lead:note:create\",\n    \"lead:activity:view\"\n  ]\n}"
+              "raw": "{\n  \"description\": \"Updated sales role\",\n  \"permissions\": [\n    \"lead:view\",\n    \"lead:update\",\n    \"lead:assign\",\n    \"lead:note:create\",\n    \"lead:activity:view\",\n    \"webinar:view\",\n    \"webinar:update\"\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/roles/{{roleId}}",
@@ -319,13 +364,11 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
-                  "if (json.data && json.data._id) {",
-                  "  pm.collectionVariables.set('userId', json.data._id);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "if (json.data && json.data._id) pm.collectionVariables.set('userId', json.data._id);"
+                ]
               }
             }
           ],
@@ -378,6 +421,289 @@
               ]
             }
           }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sales User Updated\",\n  \"roleId\": \"{{roleId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webinars",
+      "item": [
+        {
+          "name": "Create Webinar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data._id) pm.collectionVariables.set('webinarId', json.data._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Stock Market Crorepati Blueprint\",\n  \"description\": \"Weekend flagship webinar\",\n  \"speakerName\": \"MoneyCraft Team\",\n  \"eventDate\": \"2026-03-15T00:00:00.000Z\",\n  \"startTime\": \"11:00\",\n  \"timezone\": \"Asia/Kolkata\",\n  \"durationMinutes\": 180,\n  \"mode\": \"ONLINE\",\n  \"platform\": \"ZOOM\",\n  \"webinarLink\": \"https://zoom.us/j/1234567890\",\n  \"maxAttendees\": 500,\n  \"status\": \"SCHEDULED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webinars"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Webinars",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars?page=1&limit=10&sortBy=eventDate&sortOrder=asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webinars"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "eventDate"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Webinars",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars?search=blueprint",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webinars"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "blueprint"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filter Webinars By Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars?status=SCHEDULED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webinars"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "SCHEDULED"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Webinar Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars/{{webinarId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webinars",
+                "{{webinarId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Webinar",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"speakerName\": \"MoneyCraft Research Desk\",\n  \"startTime\": \"11:30\",\n  \"durationMinutes\": 210,\n  \"maxAttendees\": 750\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars/{{webinarId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webinars",
+                "{{webinarId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Webinar Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"COMPLETED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/webinars/{{webinarId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webinars",
+                "{{webinarId}}",
+                "status"
+              ]
+            }
+          }
         }
       ]
     },
@@ -390,13 +716,11 @@
             {
               "listen": "test",
               "script": {
+                "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
-                  "if (json.data && json.data._id) {",
-                  "  pm.collectionVariables.set('leadId', json.data._id);",
-                  "}"
-                ],
-                "type": "text/javascript"
+                  "if (json.data && json.data._id) pm.collectionVariables.set('leadId', json.data._id);"
+                ]
               }
             }
           ],
@@ -410,7 +734,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Rahul Sharma\",\n  \"email\": \"rahul@example.com\",\n  \"phone\": \"9876543210\",\n  \"city\": \"Delhi\",\n  \"source\": \"checkout\"\n}"
+              "raw": "{\n  \"name\": \"Rahul Sharma\",\n  \"email\": \"rahul@example.com\",\n  \"phone\": \"9876543210\",\n  \"city\": \"Delhi\",\n  \"source\": \"checkout\",\n  \"webinarId\": \"{{webinarId}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/leads",
@@ -541,6 +865,34 @@
                 {
                   "key": "status",
                   "value": "New"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filter Leads By Assignee",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/leads?assignedTo={{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leads"
+              ],
+              "query": [
+                {
+                  "key": "assignedTo",
+                  "value": "{{userId}}"
                 }
               ]
             }

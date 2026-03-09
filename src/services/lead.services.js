@@ -104,6 +104,13 @@ const validateLeadAssignee = async (assignedTo) => {
 };
 
 const createLead = async (payload) => {
+  let notification = {
+    status: "not_applicable",
+    provider: "wati",
+    reason: null,
+    response: null,
+  };
+
   const existingLead = await Lead.findOne({
     $or: [
       { phone: payload.phone.trim() },
@@ -167,6 +174,13 @@ const createLead = async (payload) => {
         response: notificationResult.data || null,
       });
 
+      notification = {
+        status: notificationResult.skipped ? "skipped" : "sent",
+        provider: "wati",
+        reason: notificationResult.reason || null,
+        response: notificationResult.data || null,
+      };
+
       await createLeadActivity({
         leadId: lead._id,
         action: notificationResult.skipped
@@ -188,6 +202,13 @@ const createLead = async (payload) => {
         details: error.errors || null,
       });
 
+      notification = {
+        status: "failed",
+        provider: "wati",
+        reason: error.message,
+        response: error.errors || null,
+      };
+
       await createLeadActivity({
         leadId: lead._id,
         action: "webinar_confirmation_failed",
@@ -206,6 +227,13 @@ const createLead = async (payload) => {
       webinarTitle: lead.webinarTitle,
     });
 
+    notification = {
+      status: "skipped",
+      provider: "wati",
+      reason: "No scheduled webinar matched the provided webinar title",
+      response: null,
+    };
+
     await createLeadActivity({
       leadId: lead._id,
       action: "webinar_confirmation_skipped",
@@ -216,9 +244,14 @@ const createLead = async (payload) => {
     });
   }
 
-  return Lead.findById(lead._id)
+  const createdLead = await Lead.findById(lead._id)
     .populate("assignedTo", "name email")
     .populate("webinar", "title eventDate startTime durationMinutes mode platform webinarLink location");
+
+  const leadObject = createdLead.toObject();
+  leadObject.notification = notification;
+
+  return leadObject;
 };
 
 const listLeads = async (query) => {

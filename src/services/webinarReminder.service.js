@@ -20,12 +20,18 @@ const LOOKBACK_MINUTES = Math.max(Number(process.env.WEBINAR_REMINDER_LOOKBACK_M
 const REMINDER_CONFIGS = [
   {
     type: REMINDER_TYPES[0],
+    offsetMinutes: 24 * 60,
+    broadcastSuffix: "1day",
+    countdownLabel: "1 day",
+  },
+  {
+    type: REMINDER_TYPES[1],
     offsetMinutes: 60,
     broadcastSuffix: "1hr",
     countdownLabel: "1 hr",
   },
   {
-    type: REMINDER_TYPES[1],
+    type: REMINDER_TYPES[2],
     offsetMinutes: 10,
     broadcastSuffix: "10min",
     countdownLabel: "10 min",
