@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const REMINDER_TYPES = ["ONE_DAY", "ONE_HOUR", "TEN_MINUTES"];
 const REMINDER_STATUSES = ["SENT", "FAILED", "SKIPPED"];
+const REMINDER_PROVIDERS = ["wati", "sendgrid"];
 
 const webinarReminderLogSchema = new mongoose.Schema(
   {
@@ -35,6 +36,7 @@ const webinarReminderLogSchema = new mongoose.Schema(
     },
     provider: {
       type: String,
+      enum: REMINDER_PROVIDERS,
       trim: true,
       default: "wati",
     },
@@ -53,10 +55,11 @@ const webinarReminderLogSchema = new mongoose.Schema(
 );
 
 webinarReminderLogSchema.index({ webinar: 1, reminderType: 1, scheduledFor: 1 });
-webinarReminderLogSchema.index({ lead: 1, webinar: 1, reminderType: 1 }, { unique: true });
+webinarReminderLogSchema.index({ lead: 1, webinar: 1, reminderType: 1, provider: 1 }, { unique: true });
 
 module.exports = {
   WebinarReminderLog: mongoose.model("WebinarReminderLog", webinarReminderLogSchema),
+  REMINDER_PROVIDERS,
   REMINDER_STATUSES,
   REMINDER_TYPES,
 };

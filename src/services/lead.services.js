@@ -103,13 +103,63 @@ const validateLeadAssignee = async (assignedTo) => {
   return user;
 };
 
-const createLead = async (payload) => {
-  let notification = {
-    status: "not_applicable",
-    provider: "wati",
-    reason: null,
-    response: null,
+const buildNotificationSummary = (channels) => {
+  const entries = Object.values(channels);
+
+  if (entries.every((channel) => channel.status === "not_applicable")) {
+    return {
+      status: "not_applicable",
+      provider: "multi",
+      reason: null,
+      response: channels,
+      ...channels,
+    };
+  }
+
+  if (entries.some((channel) => channel.status === "sent")) {
+    return {
+      status: "sent",
+      provider: "multi",
+      reason: null,
+      response: channels,
+      ...channels,
+    };
+  }
+
+  if (entries.some((channel) => channel.status === "failed")) {
+    return {
+      status: "failed",
+      provider: "multi",
+      reason: entries.find((channel) => channel.status === "failed")?.reason || null,
+      response: channels,
+      ...channels,
+    };
+  }
+
+  return {
+    status: "skipped",
+    provider: "multi",
+    reason: entries.find((channel) => channel.reason)?.reason || null,
+    response: channels,
+    ...channels,
   };
+};
+
+const createLead = async (payload) => {
+  let notification = buildNotificationSummary({
+    whatsapp: {
+      status: "not_applicable",
+      provider: "wati",
+      reason: null,
+      response: null,
+    },
+    email: {
+      status: "not_applicable",
+      provider: "sendgrid",
+      reason: null,
+      response: null,
+    },
+  });
 
   const existingLead = await Lead.findOne({
     $or: [
@@ -169,29 +219,43 @@ const createLead = async (payload) => {
       logDebug("lead-registration", "Webinar confirmation notification completed", {
         leadId: lead._id,
         webinarId: webinar._id,
-        skipped: notificationResult.skipped,
-        reason: notificationResult.reason || null,
-        response: notificationResult.data || null,
+        whatsapp: notificationResult.whatsapp || null,
+        email: notificationResult.email || null,
       });
 
-      notification = {
-        status: notificationResult.skipped ? "skipped" : "sent",
-        provider: "wati",
-        reason: notificationResult.reason || null,
-        response: notificationResult.data || null,
-      };
+      notification = buildNotificationSummary({
+        whatsapp: {
+          status: notificationResult.whatsapp?.failed
+            ? "failed"
+            : notificationResult.whatsapp?.skipped
+              ? "skipped"
+              : "sent",
+          provider: "wati",
+          reason: notificationResult.whatsapp?.reason || null,
+          response: notificationResult.whatsapp?.data || null,
+        },
+        email: {
+          status: notificationResult.email?.failed
+            ? "failed"
+            : notificationResult.email?.skipped
+              ? "skipped"
+              : "sent",
+          provider: "sendgrid",
+          reason: notificationResult.email?.reason || null,
+          response: notificationResult.email?.data || null,
+        },
+      });
 
       await createLeadActivity({
         leadId: lead._id,
-        action: notificationResult.skipped
-          ? "webinar_confirmation_skipped"
-          : "webinar_confirmation_sent",
+        action:
+          notification.whatsapp.status === "sent" || notification.email.status === "sent"
+            ? "webinar_confirmation_sent"
+            : "webinar_confirmation_skipped",
         meta: {
           webinarId: webinar._id,
           webinarTitle: webinar.title,
-          provider: "wati",
-          reason: notificationResult.reason || null,
-          response: notificationResult.data || null,
+          notifications: notification,
         },
       });
     } catch (error) {
@@ -202,12 +266,20 @@ const createLead = async (payload) => {
         details: error.errors || null,
       });
 
-      notification = {
-        status: "failed",
-        provider: "wati",
-        reason: error.message,
-        response: error.errors || null,
-      };
+      notification = buildNotificationSummary({
+        whatsapp: {
+          status: "failed",
+          provider: "wati",
+          reason: error.message,
+          response: error.errors || null,
+        },
+        email: {
+          status: "failed",
+          provider: "sendgrid",
+          reason: error.message,
+          response: error.errors || null,
+        },
+      });
 
       await createLeadActivity({
         leadId: lead._id,
@@ -215,7 +287,7 @@ const createLead = async (payload) => {
         meta: {
           webinarId: webinar._id,
           webinarTitle: webinar.title,
-          provider: "wati",
+          notifications: notification,
           error: error.message,
           details: error.errors || null,
         },
@@ -227,12 +299,20 @@ const createLead = async (payload) => {
       webinarTitle: lead.webinarTitle,
     });
 
-    notification = {
-      status: "skipped",
-      provider: "wati",
-      reason: "No scheduled webinar matched the provided webinar title",
-      response: null,
-    };
+    notification = buildNotificationSummary({
+      whatsapp: {
+        status: "skipped",
+        provider: "wati",
+        reason: "No scheduled webinar matched the provided webinar title",
+        response: null,
+      },
+      email: {
+        status: "skipped",
+        provider: "sendgrid",
+        reason: "No scheduled webinar matched the provided webinar title",
+        response: null,
+      },
+    });
 
     await createLeadActivity({
       leadId: lead._id,

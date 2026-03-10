@@ -3,8 +3,23 @@ const { Webinar } = require("../models/webinar.model");
 const { formatDuration, formatEventDate } = require("../utils/dateTime");
 const { logDebug, logWarn } = require("../utils/logger");
 const { sendTemplateMessage } = require("./wati.services");
+const { sendDynamicTemplateEmail } = require("./sendgrid.services");
 
 const DEFAULT_TEMPLATE_NAME = "moneycraft_webinar_registration_confirmation";
+const DEFAULT_SENDGRID_TEMPLATE_ID = "d-9d1b0d1edcae4013b6c3d577ffa16b38";
+
+const toChannelResult = (provider, result) => {
+  if (result.status === "fulfilled") {
+    return result.value;
+  }
+
+  return {
+    skipped: false,
+    failed: true,
+    reason: result.reason?.message || `${provider} notification failed`,
+    data: result.reason?.errors || null,
+  };
+};
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -64,7 +79,7 @@ const findWebinarForLead = async ({ webinarId, webinarTitle }) => {
   return null;
 };
 
-const sendWebinarRegistrationConfirmation = async ({ lead, webinar }) => {
+const buildRegistrationNotificationData = ({ lead, webinar }) => {
   const eventDate = formatEventDate(webinar.eventDate, webinar.timezone);
   const duration = formatDuration(webinar.durationMinutes);
   const timeValue = duration
@@ -74,38 +89,69 @@ const sendWebinarRegistrationConfirmation = async ({ lead, webinar }) => {
   const webinarLinkValue =
     webinar.mode === "OFFLINE" ? webinar.location || "Location will be shared shortly" : webinar.webinarLink;
 
+  return {
+    name: lead.name,
+    email: lead.email,
+    webinar_name: webinar.title,
+    webinar_title: webinar.title,
+    date: eventDate,
+    event_date: eventDate,
+    time: timeValue,
+    event_time: timeValue,
+    platform: platformValue,
+    webinar_link: webinarLinkValue,
+  };
+};
+
+const sendWebinarRegistrationConfirmation = async ({ lead, webinar }) => {
+  const notificationData = buildRegistrationNotificationData({ lead, webinar });
+
   logDebug("webinar-notification", "Preparing webinar registration confirmation payload", {
     leadId: lead._id,
     webinarId: webinar._id,
     templateName: process.env.WATI_WEBINAR_TEMPLATE_NAME || DEFAULT_TEMPLATE_NAME,
     parameters: [
-      lead.name,
-      webinar.title,
-      lead.email,
-      eventDate,
-      timeValue,
-      platformValue,
-      webinarLinkValue,
+      notificationData.name,
+      notificationData.webinar_title,
+      notificationData.email,
+      notificationData.event_date,
+      notificationData.event_time,
+      notificationData.platform,
+      notificationData.webinar_link,
     ],
   });
 
-  return sendTemplateMessage({
-    phone: lead.phone,
-    templateName: process.env.WATI_WEBINAR_TEMPLATE_NAME || DEFAULT_TEMPLATE_NAME,
-    broadcastName: `webinar-registration-${webinar._id}`,
-    parameters: [
-      lead.name,
-      webinar.title,
-      lead.email,
-      eventDate,
-      timeValue,
-      platformValue,
-      webinarLinkValue,
-    ],
-  });
+  const [whatsappResult, emailResult] = await Promise.allSettled([
+    sendTemplateMessage({
+      phone: lead.phone,
+      templateName: process.env.WATI_WEBINAR_TEMPLATE_NAME || DEFAULT_TEMPLATE_NAME,
+      broadcastName: `webinar-registration-${webinar._id}`,
+      parameters: [
+        notificationData.name,
+        notificationData.webinar_title,
+        notificationData.email,
+        notificationData.event_date,
+        notificationData.event_time,
+        notificationData.platform,
+        notificationData.webinar_link,
+      ],
+    }),
+    sendDynamicTemplateEmail({
+      to: lead.email,
+      templateId:
+        process.env.SENDGRID_WEBINAR_REGISTRATION_TEMPLATE_ID || DEFAULT_SENDGRID_TEMPLATE_ID,
+      dynamicTemplateData: notificationData,
+    }),
+  ]);
+
+  return {
+    whatsapp: toChannelResult("whatsapp", whatsappResult),
+    email: toChannelResult("email", emailResult),
+  };
 };
 
 module.exports = {
+  buildRegistrationNotificationData,
   findWebinarForLead,
   sendWebinarRegistrationConfirmation,
 };
