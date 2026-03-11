@@ -521,13 +521,25 @@ const addLeadNote = async (leadId, userId, body) => {
 const getLeadStats = async () => {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
 
-  const [totalLeads, newLeadsToday, convertedLeads, lostLeads, followupsToday] = await Promise.all([
+  const followUpFilter = {
+    followUpDate: {
+      $gte: startOfToday,
+      $lt: endOfToday,
+    },
+  };
+
+  const [totalLeads, newLeadsToday, convertedLeads, lostLeads, followupsToday, followupLeadsToday] = await Promise.all([
     Lead.countDocuments(),
     Lead.countDocuments({ createdAt: { $gte: startOfToday } }),
     Lead.countDocuments({ status: "Converted" }),
     Lead.countDocuments({ status: "Lost" }),
-    Lead.countDocuments({ followUpDate: { $gte: startOfToday, $lt: new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000) } })
+    Lead.countDocuments(followUpFilter),
+    Lead.find(followUpFilter)
+      .select("name followUpDate")
+      .sort({ followUpDate: 1, name: 1 })
+      .lean(),
   ]);
 
   return {
@@ -535,7 +547,12 @@ const getLeadStats = async () => {
     new_leads_today: newLeadsToday,
     converted_leads: convertedLeads,
     lost_leads: lostLeads,
-    followups_today: followupsToday
+    followups_today: followupsToday,
+    followup_leads_today: followupLeadsToday.map((lead) => ({
+      id: lead._id,
+      name: lead.name,
+      followUpDate: lead.followUpDate,
+    })),
   };
 };
 
