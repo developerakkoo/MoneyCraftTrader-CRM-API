@@ -123,10 +123,27 @@ const deleteLead = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true });
 });
 
+const deleteLeadsAdmin = asyncHandler(async (req, res) => {
+  const { leadIds, name, deleteAll } = req.body;
+
+  const result = await leadService.deleteLeadsAdmin({
+    leadIds,
+    name,
+    deleteAll,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Leads deleted successfully",
+    data: result,
+  });
+});
+
 module.exports = {
   addLeadNote,
   createLead,
   deleteLead,
+  deleteLeadsAdmin,
   getLeadById,
   listLeads,
   updateLead,

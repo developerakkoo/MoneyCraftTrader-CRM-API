@@ -3,7 +3,10 @@ const express = require("express");
 const leadController = require("../controllers/lead.controllers");
 const { PERMISSIONS } = require("../constants/permissions");
 const { authenticate } = require("../middlewares/auth.middleware");
-const { requirePermission } = require("../middlewares/permission.middleware");
+const {
+  requirePermission,
+  requireSuperAdmin,
+} = require("../middlewares/permission.middleware");
 
 const router = express.Router();
 
@@ -105,9 +108,16 @@ router.patch(
 );
 
 router.delete(
+  "/admin/bulk-delete",
+  authenticate,
+  requireSuperAdmin,
+  leadController.deleteLeadsAdmin
+);
+
+router.delete(
   "/:id",
   authenticate,
-  requirePermission(PERMISSIONS.LEAD_UPDATE),
+  requireSuperAdmin,
   leadController.deleteLead
 );
 

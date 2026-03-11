@@ -561,6 +561,14 @@ const exportLeads = async () => {
   return csv;
 };
 
+const deleteLeadsAndRelations = async (leadIds) => {
+  await Promise.all([
+    LeadActivity.deleteMany({ lead: { $in: leadIds } }),
+    LeadNote.deleteMany({ lead: { $in: leadIds } }),
+    Lead.deleteMany({ _id: { $in: leadIds } }),
+  ]);
+};
+
 const deleteLead = async (leadId) => {
   if (!mongoose.Types.ObjectId.isValid(leadId)) {
     throw new HttpError(400, "Invalid lead id");
@@ -571,17 +579,60 @@ const deleteLead = async (leadId) => {
     throw new HttpError(404, "Lead not found");
   }
 
-  await Promise.all([
-    LeadActivity.deleteMany({ lead: leadId }),
-    LeadNote.deleteMany({ lead: leadId }),
-  ]);
-  await Lead.findByIdAndDelete(leadId);
+  await deleteLeadsAndRelations([lead._id]);
+};
+
+const deleteLeadsAdmin = async ({ leadIds, name, deleteAll }) => {
+  const hasLeadIds = Array.isArray(leadIds) && leadIds.length > 0;
+  const hasName = typeof name === "string" && name.trim();
+
+  if (!deleteAll && !hasLeadIds && !hasName) {
+    throw new HttpError(
+      400,
+      "Provide deleteAll=true, a leadIds array, or a name to delete leads"
+    );
+  }
+
+  let filters = {};
+
+  if (deleteAll) {
+    filters = {};
+  } else if (hasLeadIds) {
+    const invalidLeadId = leadIds.find((leadId) => !mongoose.Types.ObjectId.isValid(leadId));
+    if (invalidLeadId) {
+      throw new HttpError(400, `Invalid lead id: ${invalidLeadId}`);
+    }
+
+    filters = {
+      _id: { $in: leadIds },
+    };
+  } else if (hasName) {
+    const escapedName = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filters = {
+      name: new RegExp(`^${escapedName}$`, "i"),
+    };
+  }
+
+  const leads = await Lead.find(filters).select("_id name email phone");
+  if (leads.length === 0) {
+    throw new HttpError(404, "No leads found matching the delete criteria");
+  }
+
+  const matchedLeadIds = leads.map((lead) => lead._id);
+  await deleteLeadsAndRelations(matchedLeadIds);
+
+  return {
+    deletedCount: matchedLeadIds.length,
+    deletedLeadIds: matchedLeadIds,
+    deletedLeads: leads,
+  };
 };
 
 module.exports = {
   addLeadNote,
   createLead,
   deleteLead,
+  deleteLeadsAdmin,
   getLeadDetail,
   listLeads,
   updateLead,
