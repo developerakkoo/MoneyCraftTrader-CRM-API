@@ -1,20 +1,12 @@
 const mongoose = require("mongoose");
 
 const Lead = require("../models/lead.model");
-const LeadActivity = require("../models/leadActivity.model");
 const { Reminder } = require("../models/reminder.model");
 const HttpError = require("../utils/httpError");
+const { createLeadActivity } = require("./leadActivity.services");
 
 const DAY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_REGEX = /^\d{4}-\d{2}$/;
-
-const createLeadActivity = async ({ leadId, userId, action, meta = {} }) =>
-  LeadActivity.create({
-    lead: leadId,
-    user: userId || null,
-    action,
-    meta,
-  });
 
 const ensureValidLead = async (leadId) => {
   if (!mongoose.Types.ObjectId.isValid(leadId)) {

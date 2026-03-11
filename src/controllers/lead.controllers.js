@@ -139,11 +139,31 @@ const deleteLeadsAdmin = asyncHandler(async (req, res) => {
   });
 });
 
+const getLeadActivities = asyncHandler(async (req, res) => {
+  const activities = await leadService.getLeadActivities(req.params.leadId);
+
+  res.status(200).json({
+    success: true,
+    data: activities,
+  });
+});
+
+const getLeadActivityCount = asyncHandler(async (req, res) => {
+  const counts = await leadService.getLeadActivityCount(req.params.leadId);
+
+  res.status(200).json({
+    success: true,
+    data: counts,
+  });
+});
+
 module.exports = {
   addLeadNote,
   createLead,
   deleteLead,
   deleteLeadsAdmin,
+  getLeadActivities,
+  getLeadActivityCount,
   getLeadById,
   listLeads,
   updateLead,

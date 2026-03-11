@@ -8,6 +8,12 @@ const { LEAD_STATUSES } = require("../constants/lead");
 const { PERMISSIONS } = require("../constants/permissions");
 const { logDebug, logError, logWarn } = require("../utils/logger");
 const webinarNotificationService = require("./webinarNotification.services");
+const {
+  createChannelActivity,
+  createLeadActivity,
+  getLeadActivityCounts,
+  listLeadActivities,
+} = require("./leadActivity.services");
 
 const buildLeadFilters = (query) => {
   const filters = {};
@@ -70,15 +76,6 @@ const buildLeadSort = (sortBy = "createdAt", sortOrder = "desc") => {
   const order = sortOrder === "asc" ? 1 : -1;
 
   return { [field]: order };
-};
-
-const createLeadActivity = async ({ leadId, userId, action, meta = {} }) => {
-  return LeadActivity.create({
-    lead: leadId,
-    user: userId || null,
-    action,
-    meta,
-  });
 };
 
 const validateLeadAssignee = async (assignedTo) => {
@@ -201,6 +198,22 @@ const createLead = async (payload) => {
     },
   });
 
+  if (lead.webinar || lead.webinarTitle) {
+    await createLeadActivity({
+      leadId: lead._id,
+      action: "webinar_registered",
+      category: "webinar",
+      type: "registration",
+      status: "completed",
+      title: "Webinar registered",
+      meta: {
+        webinarId: lead.webinar,
+        webinarTitle: lead.webinarTitle,
+        source: lead.source,
+      },
+    });
+  }
+
   if ((lead.source || "").toLowerCase() === "checkout" && webinar) {
     logDebug("lead-registration", "Attempting webinar confirmation notification", {
       leadId: lead._id,
@@ -258,6 +271,37 @@ const createLead = async (payload) => {
           notifications: notification,
         },
       });
+
+      await Promise.all([
+        createChannelActivity({
+          leadId: lead._id,
+          channel: "whatsapp",
+          status: notification.whatsapp.status,
+          type: "webinar_registration_confirmation",
+          title: "WhatsApp registration confirmation",
+          meta: {
+            webinarId: webinar._id,
+            webinarTitle: webinar.title,
+            provider: notification.whatsapp.provider,
+            reason: notification.whatsapp.reason,
+            response: notification.whatsapp.response,
+          },
+        }),
+        createChannelActivity({
+          leadId: lead._id,
+          channel: "email",
+          status: notification.email.status,
+          type: "webinar_registration_confirmation",
+          title: "Email registration confirmation",
+          meta: {
+            webinarId: webinar._id,
+            webinarTitle: webinar.title,
+            provider: notification.email.provider,
+            reason: notification.email.reason,
+            response: notification.email.response,
+          },
+        }),
+      ]);
     } catch (error) {
       logError("lead-registration", "Webinar confirmation notification failed", {
         leadId: lead._id,
@@ -292,6 +336,35 @@ const createLead = async (payload) => {
           details: error.errors || null,
         },
       });
+
+      await Promise.all([
+        createChannelActivity({
+          leadId: lead._id,
+          channel: "whatsapp",
+          status: "failed",
+          type: "webinar_registration_confirmation",
+          title: "WhatsApp registration confirmation",
+          meta: {
+            webinarId: webinar._id,
+            webinarTitle: webinar.title,
+            error: error.message,
+            details: error.errors || null,
+          },
+        }),
+        createChannelActivity({
+          leadId: lead._id,
+          channel: "email",
+          status: "failed",
+          type: "webinar_registration_confirmation",
+          title: "Email registration confirmation",
+          meta: {
+            webinarId: webinar._id,
+            webinarTitle: webinar.title,
+            error: error.message,
+            details: error.errors || null,
+          },
+        }),
+      ]);
     }
   } else if ((lead.source || "").toLowerCase() === "checkout" && lead.webinarTitle) {
     logWarn("lead-registration", "Skipping webinar confirmation because webinar could not be matched", {
@@ -385,12 +458,20 @@ const getLeadDetail = async (leadId, userId) => {
     LeadNote.find({ lead: leadId })
       .populate("user", "name email")
       .sort({ createdAt: -1 }),
-    LeadActivity.find({ lead: leadId })
-      .populate("user", "name email")
-      .sort({ createdAt: -1 }),
+    listLeadActivities(leadId),
   ]);
 
-  return { lead, notes, activities };
+  const activityCounts = await getLeadActivityCounts(leadId);
+
+  return { lead, notes, activities, activityCounts };
+};
+
+const getLeadActivities = async (leadId) => {
+  return listLeadActivities(leadId);
+};
+
+const getLeadActivityCount = async (leadId) => {
+  return getLeadActivityCounts(leadId);
 };
 
 const updateLead = async (leadId, updates, actor) => {
@@ -650,6 +731,8 @@ module.exports = {
   createLead,
   deleteLead,
   deleteLeadsAdmin,
+  getLeadActivities,
+  getLeadActivityCount,
   getLeadDetail,
   listLeads,
   updateLead,

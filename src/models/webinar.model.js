@@ -65,6 +65,11 @@ const webinarSchema = new mongoose.Schema(
       min: 1,
       default: null,
     },
+    isActive: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     status: {
       type: String,
       enum: WEBINAR_STATUSES,
@@ -89,6 +94,7 @@ const webinarSchema = new mongoose.Schema(
 webinarSchema.index({ eventDate: 1, startTime: 1 });
 webinarSchema.index({ status: 1, mode: 1, platform: 1 });
 webinarSchema.index({ title: "text", speakerName: "text" });
+webinarSchema.index({ isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true } });
 
 module.exports = {
   Webinar: mongoose.model("Webinar", webinarSchema),

@@ -22,10 +22,27 @@ const ALLOWED_MUTATION_FIELDS = [
   "webinarLink",
   "location",
   "maxAttendees",
+  "isActive",
   "status",
 ];
 
 const normalizeText = (value) => (typeof value === "string" ? value.trim() : value);
+const normalizeBoolean = (value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return value;
+};
+
 const pickAllowedFields = (payload) =>
   ALLOWED_MUTATION_FIELDS.reduce((result, key) => {
     if (payload[key] !== undefined) {
@@ -77,6 +94,7 @@ const validatePayload = (payload, { partial = false } = {}) => {
     platform: normalizeText(payload.platform),
     webinarLink: normalizeText(payload.webinarLink),
     location: normalizeText(payload.location),
+    isActive: normalizeBoolean(payload.isActive),
     status: normalizeText(payload.status),
   };
 
@@ -122,6 +140,10 @@ const validatePayload = (payload, { partial = false } = {}) => {
     normalized.maxAttendees = maxAttendees;
   }
 
+  if (normalized.isActive !== undefined && typeof normalized.isActive !== "boolean") {
+    throw new HttpError(400, "isActive must be a boolean value");
+  }
+
   const effectiveMode = normalized.mode ?? payload.currentMode;
   if (effectiveMode) {
     validateModeSpecificFields({
@@ -157,6 +179,13 @@ const buildFilters = (query) => {
 
   if (query.platform && WEBINAR_PLATFORMS.includes(query.platform)) {
     filters.platform = query.platform;
+  }
+
+  if (query.isActive !== undefined) {
+    const normalizedIsActive = normalizeBoolean(query.isActive);
+    if (typeof normalizedIsActive === "boolean") {
+      filters.isActive = normalizedIsActive;
+    }
   }
 
   if (query.dateFrom || query.dateTo) {
@@ -207,14 +236,49 @@ const getWebinarByIdOrThrow = async (webinarId) => {
   return webinar;
 };
 
+const ensureSingleActiveWebinar = async (webinarId, actorId) => {
+  const filters = {
+    isActive: true,
+  };
+
+  if (webinarId) {
+    filters._id = { $ne: webinarId };
+  }
+
+  await Webinar.updateMany(filters, {
+    $set: {
+      isActive: false,
+      updatedBy: actorId,
+    },
+  });
+};
+
+const saveWebinarWithActiveGuard = async (webinar) => {
+  try {
+    await webinar.save();
+  } catch (error) {
+    if (error?.code === 11000 && error?.keyPattern?.isActive) {
+      throw new HttpError(409, "Another webinar is already active. Please try again.");
+    }
+
+    throw error;
+  }
+};
+
 const createWebinar = async (payload, actorId) => {
   const validatedPayload = validatePayload(payload);
 
-  const webinar = await Webinar.create({
+  if (validatedPayload.isActive === true) {
+    await ensureSingleActiveWebinar(null, actorId);
+  }
+
+  const webinar = new Webinar({
     ...validatedPayload,
     createdBy: actorId,
     updatedBy: actorId,
   });
+
+  await saveWebinarWithActiveGuard(webinar);
 
   return getWebinarByIdOrThrow(webinar._id);
 };
@@ -260,7 +324,12 @@ const updateWebinar = async (webinarId, payload, actorId) => {
   );
 
   Object.assign(webinar, pickAllowedFields(validatedPayload), { updatedBy: actorId });
-  await webinar.save();
+
+  if (validatedPayload.isActive === true) {
+    await ensureSingleActiveWebinar(webinar._id, actorId);
+  }
+
+  await saveWebinarWithActiveGuard(webinar);
 
   return getWebinarByIdOrThrow(webinarId);
 };

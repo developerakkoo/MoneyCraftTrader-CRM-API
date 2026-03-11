@@ -1,5 +1,4 @@
 const Lead = require("../models/lead.model");
-const LeadActivity = require("../models/leadActivity.model");
 const { Webinar } = require("../models/webinar.model");
 const {
   WebinarReminderLog,
@@ -15,6 +14,7 @@ const {
 const { logDebug, logError, logInfo, logWarn } = require("../utils/logger");
 const { sendTemplateMessage } = require("./wati.services");
 const { sendDynamicTemplateEmail } = require("./sendgrid.services");
+const { createChannelActivity, createLeadActivity } = require("./leadActivity.services");
 
 const DEFAULT_TEMPLATE_NAME = "moneycraft_webinar_dynamic_reminder";
 const DEFAULT_SENDGRID_TEMPLATE_ID = "d-2a8bd5008c884213810d7f4c25c46647";
@@ -43,13 +43,6 @@ const REMINDER_CONFIGS = [
 
 let schedulerHandle = null;
 let isSchedulerRunning = false;
-
-const createLeadActivity = async ({ leadId, action, meta = {} }) =>
-  LeadActivity.create({
-    lead: leadId,
-    action,
-    meta,
-  });
 
 const buildReminderNotificationData = (lead, webinar, reminderConfig) => ({
   name: lead.name,
@@ -322,6 +315,45 @@ const processLeadReminder = async ({ lead, webinar, reminderConfig, scheduledFor
       },
     },
   });
+
+  await Promise.all([
+    createChannelActivity({
+      leadId: lead._id,
+      channel: "whatsapp",
+      status: notificationResult.whatsapp.failed
+        ? "failed"
+        : notificationResult.whatsapp.skipped
+          ? "skipped"
+          : "sent",
+      type: "webinar_reminder",
+      title: "WhatsApp webinar reminder",
+      meta: {
+        webinarId: webinar._id,
+        webinarTitle: webinar.title,
+        reminderType: reminderConfig.type,
+        response: notificationResult.whatsapp.data || null,
+        reason: notificationResult.whatsapp.reason || null,
+      },
+    }),
+    createChannelActivity({
+      leadId: lead._id,
+      channel: "email",
+      status: notificationResult.email.failed
+        ? "failed"
+        : notificationResult.email.skipped
+          ? "skipped"
+          : "sent",
+      type: "webinar_reminder",
+      title: "Email webinar reminder",
+      meta: {
+        webinarId: webinar._id,
+        webinarTitle: webinar.title,
+        reminderType: reminderConfig.type,
+        response: notificationResult.email.data || null,
+        reason: notificationResult.email.reason || null,
+      },
+    }),
+  ]);
 };
 
 const processReminderConfigForWebinar = async (webinar, reminderConfig, now) => {

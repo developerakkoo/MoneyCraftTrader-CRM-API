@@ -63,14 +63,28 @@ router.get(
 );
 
 router.get(
+  "/:leadId/activities",
+  authenticate,
+  requirePermission(PERMISSIONS.LEAD_VIEW, PERMISSIONS.LEAD_ACTIVITY_VIEW),
+  leadController.getLeadActivities
+);
+
+router.get(
+  "/:leadId/activity-count",
+  authenticate,
+  requirePermission(PERMISSIONS.LEAD_VIEW, PERMISSIONS.LEAD_ACTIVITY_VIEW),
+  leadController.getLeadActivityCount
+);
+
+router.get(
   "/:id/activity",
   authenticate,
-  requirePermission(PERMISSIONS.LEAD_VIEW),
-  (req, res, next) => {
-    // The activity is returned by getLeadById as well, but we can make a dedicated one, or just map to getLeadById
+  requirePermission(PERMISSIONS.LEAD_VIEW, PERMISSIONS.LEAD_ACTIVITY_VIEW),
+  (req, _res, next) => {
+    req.params.leadId = req.params.id;
     next();
   },
-  leadController.getLeadById
+  leadController.getLeadActivities
 );
 
 router.get(

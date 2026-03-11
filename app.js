@@ -7,6 +7,7 @@ const roleRoutes = require("./src/routes/role.routes");
 const userRoutes = require("./src/routes/user.routes");
 const webinarRoutes = require("./src/routes/webinar.routes");
 const reminderRoutes = require("./src/routes/reminder.routes");
+const whatsappRoutes = require("./src/routes/whatsapp.routes");
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use("/api/roles", roleRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/webinars", webinarRoutes);
 app.use("/api/reminders", reminderRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
